@@ -35,182 +35,6 @@ class MassContribUpdateCommand extends TerminusCommand {
 
   /**
    * Perform mass Drupal contrib module updates on sites.
-   *
-   * ## OPTIONS
-   *
-   * [--report]
-   * : Display the contrib modules that need updates without actually performing the updates.
-   *
-   * [--update-only=<comma separated module list>]
-   * : Specify a list of contrib modules to update.
-   *
-   * [--no-updatedb]
-   * : Use flag to skip running update.php after the update has applied
-   *
-   * [--xoption=<theirs|ours>]
-   * : Corresponds to git's -X option, set to 'theirs' by default
-   *   -- https://www.kernel.org/pub/software/scm/git/docs/git-merge.html
-   *
-   * [--tag=<tag>]
-   * : Tag to filter by
-   *
-   * [--org=<id>]
-   * : Only necessary if using --tag. Organization which has tagged the site
-   *
-   * [--cached]
-   * : Set to prevent rebuilding of sites cache
-   *
-   * @subcommand mass-contrib-update
-   */
-  public function massContribUpdate($args, $assoc_args) {
-    // Ensure the sitesCache is up to date
-    if (!isset($assoc_args['cached'])) {
-      $this->sites->rebuildCache();
-    }
-
-    $data     = array();
-    $report   = $this->input()->optional(
-      array(
-        'key'     => 'report',
-        'choices' => $assoc_args,
-        'default' => false,
-      )
-    );
-    $confirm   = $this->input()->optional(
-      array(
-        'key'     => 'confirm',
-        'choices' => $assoc_args,
-        'default' => false,
-      )
-    );
-    $tag       = $this->input()->optional(
-      array(
-        'key'     => 'tag',
-        'choices' => $assoc_args,
-        'default' => false,
-      )
-    );
-
-    $org = '';
-    if ($tag) {
-      $org = $this->input()->orgId(array('args' => $assoc_args));
-    }
-    $sites = $this->sites->filterAllByTag($tag, $org);
-
-    // Start status messages.
-    if ($upstream) {
-      $this->log()->info(
-        'Looking for sites using {upstream}.',
-        compact('upstream')
-      );
-    }
-
-    foreach ($sites as $site) {
-      $context = array('site' => $site->get('name'));
-      $site->fetch();
-      $updates = $site->getUpstreamUpdates();
-      if (!isset($updates->behind)) {
-        // No updates, go back to start.
-        continue;
-      }
-      // Check for upstream argument and site upstream URL match.
-      $siteUpstream = $site->info('upstream');
-      if ($upstream && isset($siteUpstream->url)) {
-        if ($siteUpstream->url <> $upstream) {
-          // Uptream doesn't match, go back to start.
-          continue;
-        }
-      }
-
-      if ($updates->behind > 0) {
-        $data[$site->get('name')] = array(
-          'site'   => $site->get('name'),
-          'status' => 'Needs update'
-        );
-        $env = $site->environments->get('dev');
-        if ($env->info('connection_mode') == 'sftp') {
-          $message  = '{site} has available updates, but is in SFTP mode.';
-          $message .= ' Switch to Git mode to apply updates.';
-          $this->log()->warning($message, $context);
-          $data[$site->get('name')] = array(
-            'site'=> $site->get('name'),
-            'status' => 'Needs update - switch to Git mode'
-          );
-          continue;
-        }
-        $updatedb = !$this->input()->optional(
-          array(
-            'key'     => 'updatedb',
-            'choices' => $assoc_args,
-            'default' => false,
-          )
-        );
-        $xoption  = !$this->input()->optional(
-          array(
-            'key'     => 'xoption',
-            'choices' => $assoc_args,
-            'default' => 'theirs',
-          )
-        );
-        if (!$report) {
-          $message = 'Apply upstream updates to %s ';
-          $message .= '( run update.php:%s, xoption:%s ) ';
-          $confirmed = $this->input()->confirm(
-            array(
-              'message' => $message,
-              'context' => array(
-                $site->get('name'),
-                var_export($updatedb, 1),
-                var_export($xoption, 1)
-              ),
-              'exit' => false,
-            )
-          );
-          if (!$confirmed) {
-            continue; // User says No, go back to start.
-          }
-          // Back up the site so it may be restored should something go awry
-          $this->log()->info('Backing up {site}.', $context);
-          $backup = $env->backups->create(['element' => 'all',]);
-          // Only continue if the backup was successful.
-          if ($backup) {
-            $this->log()->info('Backup of {site} created.', $context);
-            $this->log()->info('Updating {site}.', $context);
-            $response = $site->applyUpstreamUpdates(
-              $env->get('id'),
-              $updatedb,
-              $xoption
-            );
-            $data[$site->get('name')]['status'] = 'Updated';
-            $this->log()->info('{site} is updated.', $context);
-          } else {
-            $data[$site->get('name')]['status'] = 'Backup failed';
-            $this->failure(
-              'There was a problem backing up {site}. Update aborted.',
-              $context
-            );
-          }
-        }
-      } else {
-        if (isset($assoc_args['report'])) {
-          $data[$site->get('name')] = array(
-            'site'   => $site->get('name'),
-            'status' => 'Up to date'
-          );
-        }
-      }
-    }
-
-    if (!empty($data)) {
-      sort($data);
-      $this->output()->outputRecordList($data);
-    } else {
-      $this->log()->info('No sites in need of updating.');
-    }
-  }
-
-  /**
-   * Perform mass Drupal contrib module updates on sites.
    * Note: because of the size of this call, it is cached
    *   and also is the basis for loading individual sites by name
    *
@@ -221,6 +45,18 @@ class MassContribUpdateCommand extends TerminusCommand {
    *
    * [--report]
    * : Display the contrib modules that need updates without actually performing the updates.
+   *
+   * [--yes]
+   * : Assume a yes response to any prompts while performing the updates.
+   *
+   * [--confirm]
+   * : Prompt to confirm before actually performing the updates on each site.
+   *
+   * [--security-only]
+   * : Apply security updates only to contrib modules.
+   *
+   * [--skip-backup]
+   * : Skip backup before performing the updates on each site.
    *
    * [--team]
    * : Filter for sites you are a team member of
@@ -241,30 +77,15 @@ class MassContribUpdateCommand extends TerminusCommand {
    * @alias mcu
    *
    * @param array $args Array of main arguments
-   * @param array $assoc_args Array of associate arguments
+   * @param array $assoc_args Array of associative arguments
    *
    */
-  public function index($args, $assoc_args) {
-    // Check for prerequisite commands.
-    exec('which terminus', $terminus_array, $terminus_error);
-    if ($terminus_error || empty($terminus_array)) {
-      $message = 'terminus command not found.';
-      $this->failure($message);
-    }
-
-    exec('which drush', $drush_array, $drush_error);
-    if ($drush_error || empty($drush_array)) {
-      $message = 'drush command not found.';
-      $this->failure($message);
-    }
-
+  public function massContribUpdate($args, $assoc_args) {
     // Always fetch a fresh list of sites.
     if (!isset($assoc_args['cached'])) {
       $this->sites->rebuildCache();
     }
     $sites = $this->sites->all();
-
-    $yn = isset($assoc_args['report']) ? 'n' : 'y';
 
     if (isset($assoc_args['team'])) {
       $sites = $this->filterByTeamMembership($sites);
@@ -293,7 +114,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     if (count($sites) == 0) {
-      $this->log()->warning('You have no sites.');
+      $this->failure('You have no sites.');
     }
 
     // Validate the --env argument value, if needed.
@@ -321,13 +142,12 @@ class MassContribUpdateCommand extends TerminusCommand {
 
     // Loop through each site and update.
     foreach ($sites as $site) {
-      $name = $site->get('name');
       $args = array(
-        'name' => $name,
-        'env'  => $env,
-        'yn'   => $yn,
+        'name'      => $site->get('name'),
+        'env'       => $env,
+        'framework' => $site->attributes->framework,
       );
-      $this->update($args);
+      $this->update($args, $assoc_args);
     }
   }
 
@@ -420,11 +240,59 @@ class MassContribUpdateCommand extends TerminusCommand {
    *
    * @param array $args
    *   The site environment arguments.
+   * @param array $assoc_args
+   *   The site associative arguments.
    */
-  private function update($args) {
+  private function update($args, $assoc_args) {
     $name = $args['name'];
     $environ = $args['env'];
-    $yn = $args['yn'];
+    $framework = $args['framework'];
+
+    $report = isset($assoc_args['report']) ? true : false;
+    $assume = isset($assoc_args['yes']) ? true : false;
+    $confirm = isset($assoc_args['confirm']) ? true : false;
+    $skip = isset($assoc_args['skip-backup']) ? true : false;
+    $security = isset($assoc_args['security-only']) ? '--security-only' : '';
+
+    // Check for valid frameworks.
+    $valid_frameworks = array(
+      'backdrop',
+      'drupal',
+      'drupal8',
+    );
+    if (!in_array($framework, $valid_frameworks)) {
+      $this->log()->error("$framework is not a valid framework.  Contrib module updates aborted for $environ environment of $name site.");
+      return 1;
+    }
+
+    // Determine drush version based on framework.
+    switch ($framework) {
+      case 'drupal':
+      case 'backdrop':
+        $drush = 'drush6';
+        break;
+      case 'drupal8':
+        $drush = 'drush8';
+        break;
+      default:
+        $drush = 'drush';
+    }
+
+    // Check for drush command.
+    exec("type $drush", $drush_array, $drush_error);
+    if (!$drush_error) {
+      $this->log()->error("$drush command not found.  Contrib module updates aborted for $environ environment of $name site.");
+      return 1;
+    }
+
+    $yn = '';
+    if ($assume) {
+      $yn = '-y';
+    }
+    if ($report) {
+      $yn = '-n';
+    }
+
     $assoc_args = array(
       'site' => $name,
       'env'  => $environ,
@@ -435,31 +303,56 @@ class MassContribUpdateCommand extends TerminusCommand {
     $env  = $site->environments->get(
       $this->input()->env(array('args' => $assoc_args, 'site' => $site))
     );
-    $backup = true;
     $mode = $env->info('connection_mode');
+    if ($mode == 'git') {
+      $this->log()->error("Unable to update contrib modules in $environ environment of $name site because the connection mode is git.  Switch to sftp connection mode and try again.");
+      return 1;
+    }
     if ($mode == 'sftp') {
       $diff = (array)$env->diffstat();
       if (!empty($diff)) {
-        $backup = false;
+        $this->log()->error("Unable to update contrib modules in $environ environment of $name site due to pending changes.  Commit changes and try again.");
+        return 1;
       }
     }
-    if ($backup) {
+    // Prompt to confirm updates.
+    if ($confirm) {
+      $message = 'Apply contrib module updates to %s environment of %s site ';
+      $confirmed = $this->input()->confirm(
+        array(
+          'message' => $message,
+          'context' => array(
+            $environ,
+            $name,
+          ),
+          'exit' => false,
+        )
+      );
+      if (!$confirmed) {
+        return 0; // User says No.
+      }
+    }
+    $proceed = true;
+    if (!$skip && !$report) {
       // Backup the site in case something goes awry.
-      $this->log()->notice("Start backup $environ environment of $name site.");
+      $this->log()->notice("Started backup for $environ environment of $name site.");
       $args = array(
         'element' => 'all',
       );
-      $workflow = $env->backups->create($args);
-      $this->log()->notice("End backup $environ environment of $name site.");
-      // Perform drush updates.
-      exec("terminus drush 'pm-update -no-core -$yn'", $update_array, $update_error);
-      if (!empty($update_error)) {
-        $message = implode("\n", $update_error);
-        $this->log()->error($message);
+      if ($proceed = $env->backups->create($args)) {
+        $this->log()->notice("Finished backup for $environ environment of $name site.");
+      } else {
+        $this->log()->error("Contrib module updates aborted for $environ environment of $name site because the backup failed.");
+        return 1;
       }
-    } else {
-      $message = "Unable to update $environ environment of $name site due to pending changes in sftp mode.";
-      $this->log()->error($message);
+    }
+    if ($proceed) {
+      // Perform contrib module updates via drush.
+      exec("terminus --site=$name --env=$environ drush 'pm-update --no-core $security $yn'", $update_array, $update_error);
+      if ($update_error) {
+        $this->log()->error("Unable to perform contrib module updates for $environ environment of $name site.");
+        return 1;
+      }
     }
   }
 }
