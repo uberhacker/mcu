@@ -123,7 +123,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     // Validate the --env argument value, if needed.
     $env = isset($assoc_args['env']) ? $assoc_args['env'] : 'dev';
     $valid_envs = array('dev', 'test', 'live');
-    $valid_env = !in_array($env, $valid_envs);
+    $valid_env = in_array($env, $valid_envs);
     if (!$valid_env) {
       foreach ($sites as $site) {
         $environments = $site->environments->all();
