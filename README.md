@@ -71,7 +71,7 @@ Apply contrib security updates only and skip the automatic backup on all dev env
 ```
 $ terminus sites mcu --security-only --skip-backup
 ```
-Apply contrib updates to all live environments and prompt while performing the updates:
+Apply contrib updates to all live environments and prompt to continue prior to performing the updates on each site:
 ```
 $ terminus sites mcu --env=live --confirm
 ```
