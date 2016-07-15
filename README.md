@@ -1,5 +1,5 @@
-# Terminus plugin for Drupal contrib module updates
-Terminus plugin to perform mass Drupal contrib module updates on Pantheon sites
+# Mass Contrib Update
+Terminus plugin to perform Drupal contrib module or theme updates on Pantheon sites
 
 ## Installation:
 Refer to the [Terminus Wiki](https://github.com/pantheon-systems/terminus/wiki/Plugins).
@@ -16,38 +16,32 @@ $ terminus sites mcu
 
 ## Options:
 ```
-[--env=<env>]
-: Filter sites by environment.  Default is 'dev'.
-
-[--report]
-: Display the contrib modules that need updates without actually performing the updates.
-
-[--yes]
-: Assume a yes response to any prompts while performing the updates.
-
-[--confirm]
-: Prompt to confirm before actually performing the updates on each site.
-
-[--security-only]
-: Apply contrib module security updates only.
-
-[--skip-backup]
-: Skip automatic backup before performing the updates on each site.
-
-[--team]
-: Filter for sites you are a team member of.
-
-[--owner]
-: Filter for sites a specific user owns. Use "me" for your own user.
-
-[--org=<id>]
-: Filter sites you can access via the organization. Use 'all' to get all.
-
-[--name=<regex>]
-: Filter sites you can access via name.
-
-[--cached]
-: Causes the command to return cached sites list instead of retrieving anew.
+--env=<env>
+    Filter sites by environment. Default is 'dev'.
+--report
+    Display the contrib modules or themes that need updated without actually performing the updates.
+--yes
+    Assume a yes response to any prompts while performing the updates.
+--confirm
+    Prompt to confirm before actually performing the updates on each site.
+--skip-backup
+    Skip backup before performing the updates on each site.
+--auto-commit
+    Commit changes with a generic message and switch back to git mode after performing the updates on each site.
+--security-only
+    Apply security updates only to contrib modules or themes.
+--projects
+    A comma separated list of specific contrib modules or themes to update.
+--team
+    Filter for sites you are a team member of.
+--owner
+    Filter for sites a specific user owns. Use &quot;me&quot; for your own user.
+--org=<id>
+    Filter sites you can access via the organization. Use 'all' to get all.
+--name=<regex>
+    Filter sites you can access via name.
+--cached
+    Causes the command to return cached sites list instead of retrieving anew.
 ```
 
 ## Examples:
