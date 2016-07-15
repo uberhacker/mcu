@@ -297,17 +297,6 @@ class MassContribUpdateCommand extends TerminusCommand {
       }
     }
 
-    // Set connection mode to sftp.
-    if ($mode == 'git') {
-      $workflow = $env->changeConnectionMode('sftp');
-      if (is_string($workflow)) {
-        $this->log()->info($workflow);
-      } else {
-        $workflow->wait();
-        $this->workflowOutput($workflow);
-      }
-    }
-
     // Prompt to confirm updates.
     if ($confirm) {
       $message = 'Apply contrib updates to %s environment of %s site ';
@@ -323,6 +312,19 @@ class MassContribUpdateCommand extends TerminusCommand {
       );
       if (!$confirmed) {
         return true; // User says No.
+      }
+    }
+
+    // Set connection mode to sftp.
+    if (!$report) {
+      if ($mode == 'git') {
+        $workflow = $env->changeConnectionMode('sftp');
+        if (is_string($workflow)) {
+          $this->log()->info($workflow);
+        } else {
+          $workflow->wait();
+          $this->workflowOutput($workflow);
+        }
       }
     }
 
@@ -358,22 +360,32 @@ class MassContribUpdateCommand extends TerminusCommand {
         ));
         return false;
       }
+      // Display output of update results.
+      if (!empty($update_array)) {
+        $message = implode("\n", $update_array);
+        $this->log()->notice($message);
+      }
     }
 
-    if ($commit) {
+    if (!$report && $commit) {
       // Determine if any updates were actually performed in the environment.
       $diff = (array)$env->diffstat();
       if (!empty($diff)) {
         // Auto-commit updates with a generic message.
-        $this->log()->notice('Start automatic update commit for {environ} environment of {name} site.', array(
-          'environ' => $environ,
-          'name' => $name,
-        ));
-        $workflow = $env->commitChanges('Updates applied by Mass Contrib Update terminus plugin.');
-        $this->log()->notice('End automatic update commit for {environ} environment of {name} site.', array(
-          'environ' => $environ,
-          'name' => $name,
-        ));
+        if ($workflow = $env->commitChanges('Updates applied by Mass Contrib Update terminus plugin.')) {
+          if (is_string($workflow)) {
+            $this->log()->info($workflow);
+          } else {
+            $workflow->wait();
+            $this->workflowOutput($workflow);
+          }
+        } else {
+          $this->log()->error('Unable to perform automatic update commit for {environ} environment of {name} site.', array(
+            'environ' => $environ,
+            'name' => $name,
+          ));
+          return false;
+        }
       }
 
       // Set connection mode to git.
