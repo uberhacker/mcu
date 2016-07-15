@@ -22,7 +22,7 @@ class MassContribUpdateCommand extends TerminusCommand {
   public $sites;
 
   /**
-   * Perform mass Drupal contrib module updates on sites.
+   * Perform Drupal contrib mass updates on sites.
    *
    * @param array $options Options to construct the command object
    * @return MassContribUpdateCommand
@@ -34,7 +34,7 @@ class MassContribUpdateCommand extends TerminusCommand {
   }
 
   /**
-   * Perform mass Drupal contrib module updates on sites.
+   * Perform Drupal contrib mass updates on sites.
    * Note: because of the size of this call, it is cached
    *   and also is the basis for loading individual sites by name
    *
@@ -44,22 +44,25 @@ class MassContribUpdateCommand extends TerminusCommand {
    * : Filter sites by environment.  Default is 'dev'.
    *
    * [--report]
-   * : Display the contrib modules that need updates without actually performing the updates.
+   * : Display the contrib modules or themes that need updated without actually performing the updates.
    *
-   * [--yes]
-   * : Assume a yes response to any prompts while performing the updates.
+   * [--auto-commit]
+   * : Commit changes with a generic message and switch back to git mode after performing the updates on each site.
    *
    * [--confirm]
    * : Prompt to confirm before actually performing the updates on each site.
    *
-   * [--security-only]
-   * : Apply security updates only to contrib modules.
-   *
    * [--skip-backup]
    * : Skip backup before performing the updates on each site.
    *
+   * [--security-only]
+   * : Apply security updates only to contrib modules or themes.
+   *
+   * [--projects]
+   * : A comma separated list of specific contrib modules or themes to update.
+   *
    * [--team]
-   * : Filter for sites you are a team member of
+   * : Filter for sites you are a team member of.
    *
    * [--owner]
    * : Filter for sites a specific user owns. Use "me" for your own user.
@@ -68,10 +71,10 @@ class MassContribUpdateCommand extends TerminusCommand {
    * : Filter sites you can access via the organization. Use 'all' to get all.
    *
    * [--name=<regex>]
-   * : Filter sites you can access via name
+   * : Filter sites you can access via name.
    *
    * [--cached]
-   * : Causes the command to return cached sites list instead of retrieving anew
+   * : Causes the command to return cached sites list instead of retrieving anew.
    *
    * @subcommand mass-contrib-update
    * @alias mcu
@@ -249,48 +252,25 @@ class MassContribUpdateCommand extends TerminusCommand {
     $framework = $args['framework'];
 
     $report = isset($assoc_args['report']) ? true : false;
-    $assume = isset($assoc_args['yes']) ? true : false;
     $confirm = isset($assoc_args['confirm']) ? true : false;
     $skip = isset($assoc_args['skip-backup']) ? true : false;
+    $commit = isset($assoc_args['auto-commit']) ? true : false;
     $security = isset($assoc_args['security-only']) ? '--security-only' : '';
+    $projects = isset($assoc_args['projects']) ? $assoc_args['projects'] : '';
+    $yn = $report ? '-n' : '-y';
 
     // Check for valid frameworks.
     $valid_frameworks = array(
-      'backdrop',
       'drupal',
       'drupal8',
     );
     if (!in_array($framework, $valid_frameworks)) {
-      $this->log()->error("$framework is not a valid framework.  Contrib module updates aborted for $environ environment of $name site.");
-      return 1;
-    }
-
-    // Determine drush version based on framework.
-    switch ($framework) {
-      case 'drupal':
-      case 'backdrop':
-        $drush = 'drush6';
-        break;
-      case 'drupal8':
-        $drush = 'drush8';
-        break;
-      default:
-        $drush = 'drush';
-    }
-
-    // Check for drush command.
-    exec("type $drush", $drush_array, $drush_error);
-    if (!$drush_error) {
-      $this->log()->error("$drush command not found.  Contrib module updates aborted for $environ environment of $name site.");
-      return 1;
-    }
-
-    $yn = '';
-    if ($assume) {
-      $yn = '-y';
-    }
-    if ($report) {
-      $yn = '-n';
+      $this->log()->error('{framework} is not a valid framework.  Contrib updates aborted for {environ} environment of {name} site.', array(
+        'framework' => $framework,
+        'environ' => $environ,
+        'name' => $name,
+      ));
+      return false;
     }
 
     $assoc_args = array(
@@ -304,20 +284,33 @@ class MassContribUpdateCommand extends TerminusCommand {
       $this->input()->env(array('args' => $assoc_args, 'site' => $site))
     );
     $mode = $env->info('connection_mode');
-    if ($mode == 'git') {
-      $this->log()->error("Unable to update contrib modules in $environ environment of $name site because the connection mode is git.  Switch to sftp connection mode and try again.");
-      return 1;
-    }
+
+    // Check for pending changes in sftp mode.
     if ($mode == 'sftp') {
       $diff = (array)$env->diffstat();
       if (!empty($diff)) {
-        $this->log()->error("Unable to update contrib modules in $environ environment of $name site due to pending changes.  Commit changes and try again.");
-        return 1;
+        $this->log()->error('Unable to update {environ} environment of {name} site due to pending changes.  Commit changes and try again.', array(
+          'environ' => $environ,
+          'name' => $name,
+        ));
+        return false;
       }
     }
+
+    // Set connection mode to sftp.
+    if ($mode == 'git') {
+      $workflow = $env->changeConnectionMode('sftp');
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
+      }
+    }
+
     // Prompt to confirm updates.
     if ($confirm) {
-      $message = 'Apply contrib module updates to %s environment of %s site ';
+      $message = 'Apply contrib updates to %s environment of %s site ';
       $confirmed = $this->input()->confirm(
         array(
           'message' => $message,
@@ -329,29 +322,67 @@ class MassContribUpdateCommand extends TerminusCommand {
         )
       );
       if (!$confirmed) {
-        return 0; // User says No.
+        return true; // User says No.
       }
     }
+
     $proceed = true;
     if (!$skip && !$report) {
       // Backup the site in case something goes awry.
-      $this->log()->notice("Started backup for $environ environment of $name site.");
       $args = array(
         'element' => 'all',
       );
       if ($proceed = $env->backups->create($args)) {
-        $this->log()->notice("Finished backup for $environ environment of $name site.");
+        if (is_string($proceed)) {
+          $this->log()->info($proceed);
+        } else {
+          $proceed->wait();
+          $this->workflowOutput($proceed);
+        }
       } else {
-        $this->log()->error("Contrib module updates aborted for $environ environment of $name site because the backup failed.");
-        return 1;
+        $this->log()->error('Backup failed. Contrib updates aborted for {environ} environment of {name} site.', array(
+          'environ' => $environ,
+          'name' => $name,
+        ));
+        return false;
       }
     }
     if ($proceed) {
-      // Perform contrib module updates via drush.
-      exec("terminus --site=$name --env=$environ drush 'pm-update --no-core $security $yn'", $update_array, $update_error);
+      // Perform contrib updates via drush.
+      $drush_options = trim("pm-update $yn --no-core $security $projects");
+      exec("terminus --site=$name --env=$environ drush '$drush_options'", $update_array, $update_error);
       if ($update_error) {
-        $this->log()->error("Unable to perform contrib module updates for $environ environment of $name site.");
-        return 1;
+        $this->log()->error('Unable to perform contrib updates for {environ} environment of {name} site.', array(
+          'environ' => $environ,
+          'name' => $name,
+        ));
+        return false;
+      }
+    }
+
+    if ($commit) {
+      // Determine if any updates were actually performed in the environment.
+      $diff = (array)$env->diffstat();
+      if (!empty($diff)) {
+        // Auto-commit updates with a generic message.
+        $this->log()->notice('Start automatic update commit for {environ} environment of {name} site.', array(
+          'environ' => $environ,
+          'name' => $name,
+        ));
+        $workflow = $env->commitChanges('Updates applied by Mass Contrib Update terminus plugin.');
+        $this->log()->notice('End automatic update commit for {environ} environment of {name} site.', array(
+          'environ' => $environ,
+          'name' => $name,
+        ));
+      }
+
+      // Set connection mode to git.
+      $workflow = $env->changeConnectionMode('git');
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
       }
     }
   }
