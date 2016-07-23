@@ -299,7 +299,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Prompt to confirm updates.
-    if ($confirm) {
+    if (!$report && $confirm) {
       $message = 'Apply contrib updates to %s environment of %s site ';
       $confirmed = $this->input()->confirm(
         array(
@@ -316,8 +316,13 @@ class MassContribUpdateCommand extends TerminusCommand {
       }
     }
 
-    // Set connection mode to sftp.
     if (!$report) {
+      // Beginning message.
+      $this->log()->notice('Started contrib updates for {environ} environment of {name} site.', array(
+        'environ' => $environ,
+        'name' => $name,
+      ));
+      // Set connection mode to sftp.
       if ($mode == 'git') {
         $workflow = $env->changeConnectionMode('sftp');
         if (is_string($workflow)) {
@@ -350,6 +355,7 @@ class MassContribUpdateCommand extends TerminusCommand {
         return false;
       }
     }
+
     if ($proceed) {
       // Perform contrib updates via drush.
       $drush_options = trim("pm-update $yn --no-core $security $projects");
@@ -366,6 +372,10 @@ class MassContribUpdateCommand extends TerminusCommand {
         $message = implode("\n", $update_array);
         $this->log()->notice($message);
       }
+      // Reload the environment.
+      $env  = $site->environments->get(
+        $this->input()->env(array('args' => $assoc_args, 'site' => $site))
+      );
     }
 
     if (!$report && $commit) {
@@ -388,7 +398,9 @@ class MassContribUpdateCommand extends TerminusCommand {
           return false;
         }
       }
+    }
 
+    if (!$report) {
       // Set connection mode to git.
       $workflow = $env->changeConnectionMode('git');
       if (is_string($workflow)) {
@@ -397,6 +409,11 @@ class MassContribUpdateCommand extends TerminusCommand {
         $workflow->wait();
         $this->workflowOutput($workflow);
       }
+      // Completion message.
+      $this->log()->notice('Finished contrib updates for {environ} environment of {name} site.', array(
+        'environ' => $environ,
+        'name' => $name,
+      ));
     }
   }
 }
