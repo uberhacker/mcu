@@ -155,7 +155,6 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Loop through each site and update.
-    $reset = isset($assoc_args['reset']);
     foreach ($sites as $site) {
       $new = true;
       $environments = $site->environments->all();
@@ -170,7 +169,6 @@ class MassContribUpdateCommand extends TerminusCommand {
         'name'      => $site->get('name'),
         'env'       => $env,
         'new'       => $new,
-        'reset'     => $reset,
         'framework' => $site->attributes->framework,
       );
       $this->update($args, $assoc_args);
@@ -419,10 +417,10 @@ class MassContribUpdateCommand extends TerminusCommand {
     $name = $args['name'];
     $environ = $args['env'];
     $new = $args['new'];
-    $reset = $args['reset'];
     $framework = $args['framework'];
 
     // Set associative arguments.
+    $reset = isset($assoc_args['reset']);
     $report = isset($assoc_args['report']);
     $confirm = isset($assoc_args['confirm']);
     $skip = isset($assoc_args['skip-backup']);
@@ -454,7 +452,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Check if contrib updates are available via drush.
-    $check_env = $new ? 'dev' : $environ;
+    $check_env = ($new || $reset) ? 'dev' : $environ;
     $drush_options = trim("pm-update -n --no-core $security $projects");
     exec("terminus --site=$name --env=$check_env drush '$drush_options'", $report_array, $report_error);
 
