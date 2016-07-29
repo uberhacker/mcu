@@ -474,159 +474,122 @@ class MassContribUpdateCommand extends TerminusCommand {
       return false;
     }
 
-    if (!$report) {
-      // Prompt to confirm updates.
-      if ($confirm) {
-        $message = 'Apply contrib updates to the %s environment of %s site? ';
+    // Return if just checking updates.
+    if ($report) {
+      return true;
+    }
+
+    // Prompt to confirm updates.
+    if ($confirm) {
+      $message = 'Apply contrib updates to the %s environment of %s site? ';
+      $confirmed = $this->input()->confirm(
+        array(
+          'message' => $message,
+          'context' => array(
+            $environ,
+            $name,
+          ),
+          'exit' => false,
+        )
+      );
+      // User says No.
+      if (!$confirmed) {
+        return true;
+      }
+    }
+
+    // Beginning message.
+    $this->log()->notice('Started contrib updates for the {environ} environment of {name} site.', array(
+      'environ' => $environ,
+      'name' => $name,
+    ));
+
+    // Delete existing mcu environment.
+    if (!$new && $reset) {
+      $mcu_args = array(
+        'site' => $name,
+        'env' => $environ,
+      );
+      $new = $this->deleteEnv($mcu_args);
+    }
+
+    // If allowed, create a new multidev environment for testing updates.
+    if ($new) {
+      $mcu_args = array(
+        'site'     => $name,
+        'from-env' => 'dev',
+        'to-env'   => $environ,
+      );
+      if (!$this->createEnv($mcu_args)) {
+        $message = 'Would you like to perform contrib updates to the dev environment of %s site instead? ';
         $confirmed = $this->input()->confirm(
           array(
             'message' => $message,
             'context' => array(
-              $environ,
               $name,
             ),
             'exit' => false,
           )
         );
-        // User says No.
-        if (!$confirmed) {
-          return true;
-        }
-      }
-
-      // Beginning message.
-      $this->log()->notice('Started contrib updates for the {environ} environment of {name} site.', array(
-        'environ' => $environ,
-        'name' => $name,
-      ));
-
-      // Delete existing mcu environment.
-      if (!$new && $reset) {
-        $mcu_args = array(
-          'site' => $name,
-          'env' => $environ,
-        );
-        $new = $this->deleteEnv($mcu_args);
-      }
-
-      // If allowed, create a new multidev environment for testing updates.
-      if ($new) {
-        $mcu_args = array(
-          'site'     => $name,
-          'from-env' => 'dev',
-          'to-env'   => $environ,
-        );
-        if (!$this->createEnv($mcu_args)) {
-          $message = 'Would you like to perform contrib updates to the dev environment of %s site instead? ';
-          $confirmed = $this->input()->confirm(
-            array(
-              'message' => $message,
-              'context' => array(
-                $name,
-              ),
-              'exit' => false,
-            )
-          );
-          if ($confirmed) {
-            $environ = 'dev';
-          } else {
-            $this->log()->notice('Contrib updates aborted for the dev environment of {name} site.', array(
-              'name' => $name,
-            ));
-            return false;
-          }
-        }
-      }
-
-      // Load the environment.
-      $assoc_args = array(
-        'site' => $name,
-        'env'  => $environ,
-      );
-      $this->sites = new Sites();
-      $site = $this->sites->get(
-        $this->input()->siteName(['args' => $assoc_args])
-      );
-      $env  = $site->environments->get(
-        $this->input()->env(array('args' => $assoc_args, 'site' => $site))
-      );
-      $env->wake();
-      $mode = $env->info('connection_mode');
-
-      // Check for pending changes in sftp mode.
-      if ($mode == 'sftp') {
-        $diff = (array)$env->diffstat();
-        if (!empty($diff)) {
-          $this->log()->error('Unable to update the {environ} environment of {name} site due to pending changes.  Commit changes and try again.', array(
-            'environ' => $environ,
+        if ($confirmed) {
+          $environ = 'dev';
+        } else {
+          $this->log()->notice('Contrib updates aborted for the dev environment of {name} site.', array(
             'name' => $name,
           ));
           return false;
         }
       }
+    }
 
-      // Set connection mode to sftp.
-      if ($mode == 'git') {
-        $workflow = $env->changeConnectionMode('sftp');
-        if (is_string($workflow)) {
-          $this->log()->info($workflow);
-        } else {
-          $workflow->wait();
-          $this->workflowOutput($workflow);
-        }
-      }
+    // Load the environment.
+    $assoc_args = array(
+      'site' => $name,
+      'env'  => $environ,
+    );
+    $this->sites = new Sites();
+    $site = $this->sites->get(
+      $this->input()->siteName(['args' => $assoc_args])
+    );
+    $env  = $site->environments->get(
+      $this->input()->env(array('args' => $assoc_args, 'site' => $site))
+    );
+    $env->wake();
+    $mode = $env->info('connection_mode');
 
-      // Backup the site in case something goes awry.
-      if (!$skip && !$new) {
-        $this->log()->notice('Started automatic backup for the {environ} environment of {name} site.', array(
-          'environ' => $environ,
-          'name' => $name,
-        ));
-        $args = array(
-          'element' => 'all',
-        );
-        if ($workflow = $env->backups->create($args)) {
-          if (is_string($workflow)) {
-            $this->log()->info($workflow);
-          } else {
-            $workflow->wait();
-            $this->workflowOutput($workflow);
-          }
-        } else {
-          $this->log()->error('Backup failed. Contrib updates aborted for the {environ} environment of {name} site.', array(
-            'environ' => $environ,
-            'name' => $name,
-          ));
-          return false;
-        }
-      }
-
-      // Perform contrib updates via drush.
-      $drush_options = trim("pm-update -y --no-core $security $projects");
-      exec("terminus --site=$name --env=$environ drush '$drush_options'", $update_array, $update_error);
-
-      // Display output of update results.
-      if (!empty($update_array)) {
-        $update_message = implode("\n", $update_array);
-        $this->log()->notice($update_message);
-      }
-
-      // Abort on error.
-      if ($update_error) {
-        $this->log()->error('Unable to perform contrib updates for the {environ} environment of {name} site.', array(
+    // Check for pending changes in sftp mode.
+    if ($mode == 'sftp') {
+      $diff = (array)$env->diffstat();
+      if (!empty($diff)) {
+        $this->log()->error('Unable to update the {environ} environment of {name} site due to pending changes.  Commit changes and try again.', array(
           'environ' => $environ,
           'name' => $name,
         ));
         return false;
       }
+    }
 
-      // Reload the environment.
-      $env  = $site->environments->get(
-        $this->input()->env(array('args' => $assoc_args, 'site' => $site))
+    // Set connection mode to sftp.
+    if ($mode == 'git') {
+      $workflow = $env->changeConnectionMode('sftp');
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
+      }
+    }
+
+    // Backup the site in case something goes awry.
+    if (!$skip && !$new) {
+      $this->log()->notice('Started automatic backup for the {environ} environment of {name} site.', array(
+        'environ' => $environ,
+        'name' => $name,
+      ));
+      $args = array(
+        'element' => 'all',
       );
-
-      // Commit updates.
-      if ($workflow = $env->commitChanges($message)) {
+      if ($workflow = $env->backups->create($args)) {
         if (is_string($workflow)) {
           $this->log()->info($workflow);
         } else {
@@ -634,29 +597,69 @@ class MassContribUpdateCommand extends TerminusCommand {
           $this->workflowOutput($workflow);
         }
       } else {
-        $this->log()->error('Unable to perform automatic update commit for the {environ} environment of {name} site.', array(
+        $this->log()->error('Backup failed. Contrib updates aborted for the {environ} environment of {name} site.', array(
           'environ' => $environ,
           'name' => $name,
         ));
         return false;
       }
+    }
 
-      // Set connection mode back to git.
-      if ($mode == 'git') {
-        $workflow = $env->changeConnectionMode('git');
-        if (is_string($workflow)) {
-          $this->log()->info($workflow);
-        } else {
-          $workflow->wait();
-          $this->workflowOutput($workflow);
-        }
-      }
+    // Perform contrib updates via drush.
+    $drush_options = trim("pm-update -y --no-core $security $projects");
+    exec("terminus --site=$name --env=$environ drush '$drush_options'", $update_array, $update_error);
 
-      // Completion message.
-      $this->log()->notice('Finished contrib updates for the {environ} environment of {name} site.', array(
+    // Display output of update results.
+    if (!empty($update_array)) {
+      $update_message = implode("\n", $update_array);
+      $this->log()->notice($update_message);
+    }
+
+    // Abort on error.
+    if ($update_error) {
+      $this->log()->error('Unable to perform contrib updates for the {environ} environment of {name} site.', array(
         'environ' => $environ,
         'name' => $name,
       ));
+      return false;
     }
+
+    // Reload the environment.
+    $env  = $site->environments->get(
+      $this->input()->env(array('args' => $assoc_args, 'site' => $site))
+    );
+
+    // Commit updates.
+    if ($workflow = $env->commitChanges($message)) {
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
+      }
+    } else {
+      $this->log()->error('Unable to perform automatic update commit for the {environ} environment of {name} site.', array(
+        'environ' => $environ,
+        'name' => $name,
+      ));
+      return false;
+    }
+
+    // Set connection mode back to git.
+    if ($mode == 'git') {
+      $workflow = $env->changeConnectionMode('git');
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
+      }
+    }
+
+    // Completion message.
+    $this->log()->notice('Finished contrib updates for the {environ} environment of {name} site.', array(
+      'environ' => $environ,
+      'name' => $name,
+    ));
   }
 }
