@@ -22,13 +22,13 @@ $ terminus help sites mcu
 ## Options:
 ```
 [--env=<env>]
-: Filter sites by environment.  Default is 'dev'.
+: Filter sites by environment.  Default is 'mcu'.
 
 [--report]
 : Display the contrib modules or themes that need updated without actually performing the updates.
 
-[--auto-commit]
-: Commit changes with a generic message and switch back to git mode after performing the updates on each site.
+[--message]
+: Commit changes after updates are applied with a user-defined message.
 
 [--confirm]
 : Prompt to confirm before actually performing the updates on each site.
@@ -41,6 +41,9 @@ $ terminus help sites mcu
 
 [--projects]
 : A comma separated list of specific contrib modules or themes to update.
+
+[--reset]
+: Delete the existing mcu multidev environment and create a new environment.
 
 [--team]
 : Filter for sites you are a team member of.
@@ -59,19 +62,27 @@ $ terminus help sites mcu
 ```
 
 ## Examples:
-Display contrib updates that would be applied to all dev environments without actually performing the updates:
+Display contrib updates that would be applied without actually performing the updates for each site:
 ```
 $ terminus sites mass-contrib-update --report
 ```
-Apply contrib updates, auto-commit with a generic message and change to git connection mode on all dev environments:
+Create a new multidev environment named mcu if it doesn't already exist, apply contrib updates and auto-commit with a generic message for each site:
 ```
-$ terminus sites mcu --auto-commit
+$ terminus sites mcu
 ```
-Apply contrib security updates only and skip the automatic backup on all dev environments:
+Delete the mcu multidev environment if it already exists, create a new environment, apply contrib updates and auto-commit with a generic message for each site:
 ```
-$ terminus sites mcu --security-only --skip-backup
+$ terminus sites mcu --reset
 ```
-Apply contrib updates to all live environments and prompt to continue prior to performing the updates on each site:
+Apply contrib security updates only, skip the automatic backup and auto-commit with a generic message on all dev environments for each site:
+```
+$ terminus sites mcu --env=dev --security-only --skip-backup
+```
+Apply contrib updates to the ctools and views projects only on the dev environment of the site named my-awesome-site and commit with a user-defined message:
+```
+$ terminus sites mcu --env=dev --message="Updated ctools and views contrib modules" --projects=ctools,views --name=my-awesome-site
+```
+Apply contrib updates to all live environments, auto-commit with a generic message and prompt to continue prior to performing the updates for each site:
 ```
 $ terminus sites mcu --env=live --confirm
 ```
