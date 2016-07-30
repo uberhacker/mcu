@@ -509,10 +509,10 @@ class MassContribUpdateCommand extends TerminusCommand {
 
     // Prompt to confirm updates.
     if ($confirm) {
-      $message = 'Apply contrib updates to the %s environment of %s site? ';
+      $confirm_message = 'Apply contrib updates to the %s environment of %s site? ';
       $confirmed = $this->input()->confirm(
         array(
-          'message' => $message,
+          'message' => $confirm_message,
           'context' => array(
             $environ,
             $name,
