@@ -82,7 +82,7 @@ Apply contrib updates to the ctools and views projects only on the dev environme
 ```
 $ terminus sites mcu --env=dev --message="Updated ctools and views contrib modules" --projects=ctools,views --name=my-awesome-site
 ```
-Apply contrib updates to all live environments, auto-commit with a generic message and prompt to continue prior to performing the updates for each site:
+Apply contrib updates to all dev environments, commit with a user-defined message and prompt to continue prior to performing the updates for each site:
 ```
-$ terminus sites mcu --env=live --confirm
+$ terminus sites mcu --env=dev --message="Applied contrib updates" --confirm
 ```
