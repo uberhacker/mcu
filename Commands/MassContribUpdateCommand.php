@@ -461,7 +461,7 @@ class MassContribUpdateCommand extends TerminusCommand {
       'drupal8',
     );
     if (!in_array($framework, $valid_frameworks)) {
-      $this->log()->error('{framework} is not a valid Drupal framework.  Contrib updates aborted for the {environ} environment of {name} site.', array(
+      $this->log()->notice('{framework} is not a valid Drupal framework.  Contrib updates aborted for the {environ} environment of {name} site.', array(
         'framework' => $framework,
         'environ' => $environ,
         'name' => $name,
