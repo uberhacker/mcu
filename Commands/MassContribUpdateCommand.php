@@ -155,8 +155,10 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Loop through each site and update.
+    $data = array();
     foreach ($sites as $site) {
       $new = true;
+      $name = $site->get('name');
       $environments = $site->environments->all();
       foreach ($environments as $environment) {
         $e = $environment->get('id');
@@ -166,12 +168,28 @@ class MassContribUpdateCommand extends TerminusCommand {
         }
       }
       $args = array(
-        'name'      => $site->get('name'),
+        'name'      => $name,
         'env'       => $env,
         'new'       => $new,
         'framework' => $site->attributes->framework,
       );
-      $this->update($args, $assoc_args);
+      $status = $this->update($args, $assoc_args);
+      if ($status) {
+        $data[$name] = array(
+          'site'   => $name,
+          'status' => $status,
+        );
+      }
+    }
+
+    // Display a summary of contrib update status for each site.
+    if (isset($assoc_args['report'])) {
+      if (!empty($data)) {
+        sort($data);
+        $this->output()->outputRecordList($data);
+      } else {
+        $this->log()->info('No sites in need of updating.');
+      }
     }
   }
 
@@ -451,6 +469,12 @@ class MassContribUpdateCommand extends TerminusCommand {
       return false;
     }
 
+    // Beginning message.
+    $this->log()->notice('Started checking contrib updates for the {environ} environment of {name} site.', array(
+      'environ' => $environ,
+      'name' => $name,
+    ));
+
     // Check if contrib updates are available via drush.
     $check_env = ($new || $reset) ? 'dev' : $environ;
     $drush_options = trim("pm-update -n --no-core $security $projects");
@@ -461,7 +485,10 @@ class MassContribUpdateCommand extends TerminusCommand {
       $report_message = implode("\n", $report_array);
       $this->log()->notice($report_message);
       if (!strpos($report_message, 'updates will be made to the following projects')) {
-        return false;
+        return 'Up to date';
+      } elseif ($report) {
+        // Return if just checking updates.
+        return 'Needs update';
       }
     }
 
@@ -474,10 +501,11 @@ class MassContribUpdateCommand extends TerminusCommand {
       return false;
     }
 
-    // Return if just checking updates.
-    if ($report) {
-      return true;
-    }
+    // Completion message.
+    $this->log()->notice('Finished checking contrib updates for the {environ} environment of {name} site.', array(
+      'environ' => $environ,
+      'name' => $name,
+    ));
 
     // Prompt to confirm updates.
     if ($confirm) {
@@ -494,12 +522,12 @@ class MassContribUpdateCommand extends TerminusCommand {
       );
       // User says No.
       if (!$confirmed) {
-        return true;
+        return false;
       }
     }
 
     // Beginning message.
-    $this->log()->notice('Started contrib updates for the {environ} environment of {name} site.', array(
+    $this->log()->notice('Started applying contrib updates for the {environ} environment of {name} site.', array(
       'environ' => $environ,
       'name' => $name,
     ));
@@ -657,7 +685,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Completion message.
-    $this->log()->notice('Finished contrib updates for the {environ} environment of {name} site.', array(
+    $this->log()->notice('Finished applying contrib updates for the {environ} environment of {name} site.', array(
       'environ' => $environ,
       'name' => $name,
     ));
