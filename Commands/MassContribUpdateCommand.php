@@ -14,7 +14,7 @@ use Terminus\Session;
 use Terminus\Utils;
 
 /**
- * Actions on multiple sites
+ * Actions on multiple sites.
  *
  * @command sites
  */
@@ -22,7 +22,7 @@ class MassContribUpdateCommand extends TerminusCommand {
   public $sites;
 
   /**
-   * Perform Drupal contrib mass updates on sites.
+   * Apply Drupal contrib updates on Pantheon sites.
    *
    * @param array $options Options to construct the command object
    * @return MassContribUpdateCommand
@@ -34,9 +34,9 @@ class MassContribUpdateCommand extends TerminusCommand {
   }
 
   /**
-   * Perform Drupal contrib mass updates on sites.
+   * Apply Drupal contrib updates on Pantheon sites.
    * Note: because of the size of this call, it is cached
-   *   and also is the basis for loading individual sites by name
+   *   and also is the basis for loading individual sites by name.
    *
    * ## OPTIONS
    *
@@ -44,7 +44,7 @@ class MassContribUpdateCommand extends TerminusCommand {
    * : Filter sites by environment.  Default is 'mcu'.
    *
    * [--report]
-   * : Display the contrib modules or themes that need updated without actually performing the updates.
+   * : Display a report of contrib update status without actually performing the updates.
    *
    * [--message]
    * : Commit changes after updates are applied with a user-defined message.
@@ -132,9 +132,11 @@ class MassContribUpdateCommand extends TerminusCommand {
     if (isset($assoc_args['env'])) {
       $env = $assoc_args['env'];
     }
-    $valid_envs = array('dev', 'test', 'live', 'mcu');
+    $valid_envs = array('dev', 'mcu');
     $valid_env = in_array($env, $valid_envs);
-    if (!$valid_env) {
+    $deploy_envs = array('test', 'live');
+    $deploy_env = in_array($env, $deploy_envs);
+    if (!$valid_env && !$deploy_env) {
       foreach ($sites as $site) {
         $environments = $site->environments->all();
         foreach ($environments as $environment) {
@@ -150,8 +152,11 @@ class MassContribUpdateCommand extends TerminusCommand {
       }
     }
     if (!$valid_env) {
-      $message = 'Invalid --env argument value. Allowed values are dev, test, live or a valid multidev environment.';
-      $this->failure($message);
+      $messages = array();
+      $messages[] = 'Invalid --env argument value.  Allowed values are dev, mcu or a valid multidev environment.';
+      $messages[] = 'If you are attempting updates on test or live, the best practice is to deploy instead.  See "terminus help site deploy".';
+      $invalid_message = implode("\n", $messages);
+      $this->failure($invalid_message);
     }
 
     // Loop through each site and update.
@@ -394,8 +399,8 @@ class MassContribUpdateCommand extends TerminusCommand {
    *   version : Drush version to use. Options are 5, 7, and 8.
    *
    * @return boolean
-   *   true : if the drush version is set successfully for each environment
-   *   false : if the drush version is not set successfully for each environment
+   *   true : Drush version is set successfully for each environment
+   *   false : Drush version is not set successfully for each environment
    */
   public function setDrushVersion($args) {
     $sites = new Sites();
@@ -549,7 +554,7 @@ class MassContribUpdateCommand extends TerminusCommand {
         'to-env'   => $environ,
       );
       if (!$this->createEnv($mcu_args)) {
-        $message = 'Would you like to perform contrib updates to the dev environment of %s site instead? ';
+        $message = 'Would you like to apply contrib updates to the dev environment of %s site instead? ';
         $confirmed = $this->input()->confirm(
           array(
             'message' => $message,
@@ -597,17 +602,6 @@ class MassContribUpdateCommand extends TerminusCommand {
       }
     }
 
-    // Set connection mode to sftp.
-    if ($mode == 'git') {
-      $workflow = $env->changeConnectionMode('sftp');
-      if (is_string($workflow)) {
-        $this->log()->info($workflow);
-      } else {
-        $workflow->wait();
-        $this->workflowOutput($workflow);
-      }
-    }
-
     // Backup the site in case something goes awry.
     if (!$skip && !$new) {
       $this->log()->notice('Started automatic backup for the {environ} environment of {name} site.', array(
@@ -625,11 +619,22 @@ class MassContribUpdateCommand extends TerminusCommand {
           $this->workflowOutput($workflow);
         }
       } else {
-        $this->log()->error('Backup failed. Contrib updates aborted for the {environ} environment of {name} site.', array(
+        $this->log()->error('Backup failed.  Contrib updates aborted for the {environ} environment of {name} site.', array(
           'environ' => $environ,
           'name' => $name,
         ));
         return false;
+      }
+    }
+
+    // Set connection mode to sftp.
+    if ($mode == 'git') {
+      $workflow = $env->changeConnectionMode('sftp');
+      if (is_string($workflow)) {
+        $this->log()->info($workflow);
+      } else {
+        $workflow->wait();
+        $this->workflowOutput($workflow);
       }
     }
 
