@@ -25,7 +25,7 @@ $ terminus help sites mcu
 : Filter sites by environment.  Default is 'mcu'.
 
 [--report]
-: Display the contrib modules or themes that need updated without actually performing the updates.
+: Display a report of contrib update status without actually performing the updates.
 
 [--message]
 : Commit changes after updates are applied with a user-defined message.
