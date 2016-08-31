@@ -82,9 +82,10 @@ class MassContribUpdateCommand extends TerminusCommand {
    * @subcommand mass-contrib-update
    * @alias mcu
    *
-   * @param array $args Array of main arguments
+   * @param array $args       Array of main arguments
    * @param array $assoc_args Array of associative arguments
    *
+   * @return null
    */
   public function massContribUpdate($args, $assoc_args) {
     $options = [
@@ -147,8 +148,9 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
     if (!$valid_env) {
       $messages = array();
-      $messages[] = 'Invalid --env argument value.  Allowed values are dev, mcu or a valid multidev environment.';
-      $messages[] = 'If you are attempting updates on test or live, the best practice is to deploy instead.  See "terminus help site deploy".';
+      $messages[] = 'Invalid --env argument value.  Allowed values are dev, mcu or a valid';
+      $messages[] = ' multidev environment.  If you are attempting updates on test or live,';
+      $messages[] = ' the best practice is to deploy instead.  See "terminus help site deploy".';
       $invalid_message = implode("\n", $messages);
       $this->failure($invalid_message);
     }
@@ -195,12 +197,12 @@ class MassContribUpdateCommand extends TerminusCommand {
   /**
    * Create a MultiDev environment.
    *
-   * @param array $args
+   * @param array $args Array of main arguments.
    *   site : Site to use
    *   to-env : Name of environment to create
    *   from-env : Environment clone content from, default = dev
    *
-   * @return boolean
+   * @return boolean Return value.
    *   true : permission is granted and the environment is created successfully
    *   false : permission is not granted or the environment is not created
    *           successfully
@@ -221,9 +223,10 @@ class MassContribUpdateCommand extends TerminusCommand {
           )
         )
       );
-      $this->log()->notice('Cloning the dev environment to create {multidev}.', array(
-        'multidev' => $to_env,
-      ));
+      $this->log()->notice(
+        'Cloning the dev environment to create {multidev}.',
+        ['multidev' => $to_env,]
+      );
       if ($workflow = $site->environments->create($to_env, $from_env)) {
         $workflow->wait();
         $this->workflowOutput($workflow);
@@ -236,15 +239,17 @@ class MassContribUpdateCommand extends TerminusCommand {
         if ($this->setDrushVersion($mcu_args)) {
           return true;
         } else {
-          $this->log()->error('Unable to set the Drush version for the {multidev} multidev environment.', array(
-            'multidev' => $to_env,
-          ));
+          $this->log()->error(
+            'Unable to set the Drush version for the {multidev} multidev environment.',
+            ['multidev' => $to_env,]
+          );
           return false;
         }
       } else {
-        $this->log()->error('Unable to create the {multidev} multidev environment.', array(
-          'multidev' => $to_env,
-        ));
+        $this->log()->error(
+          'Unable to create the {multidev} multidev environment.',
+          ['multidev' => $to_env,]
+        );
         return false;
       }
     } else {
@@ -258,11 +263,11 @@ class MassContribUpdateCommand extends TerminusCommand {
   /**
    * Delete a MultiDev environment.
    *
-   * @param array $args
+   * @param array $args Array of main arguments
    *   site : Site to use
    *   env : Name of environment to delete
    *
-   * @return boolean
+   * @return boolean Return value
    *   true : environment is deleted successfully
    *   false : environment is not deleted successfully
    */
@@ -303,12 +308,12 @@ class MassContribUpdateCommand extends TerminusCommand {
   /**
    * Set the version of Drush to be used on a specific environment or site.
    *
-   * @param array $args
+   * @param array $args Array of main arguments.
    *   site : Site to use
    *   env : Name of environment to set the Drush version
    *   version : Drush version to use. Options are 5, 7, and 8.
    *
-   * @return boolean
+   * @return boolean Return value.
    *   true : Drush version is set successfully for each environment
    *   false : Drush version is not set successfully for each environment
    */
@@ -340,10 +345,10 @@ class MassContribUpdateCommand extends TerminusCommand {
   /**
    * Perform the updates on a specific site and environment.
    *
-   * @param array $args
-   *   The site environment arguments.
-   * @param array $assoc_args
-   *   The site associative arguments.
+   * @param array $args       The site environment arguments.
+   * @param array $assoc_args The site associative arguments.
+   *
+   * @return null
    */
   private function update($args, $assoc_args) {
     // Set main arguments.
@@ -376,24 +381,33 @@ class MassContribUpdateCommand extends TerminusCommand {
       'drupal8',
     );
     if (!in_array($framework, $valid_frameworks)) {
-      $this->log()->notice('{framework} is not a valid Drupal framework.  Contrib updates aborted for the {environ} environment of {name} site.', array(
-        'framework' => $framework,
-        'environ' => $environ,
-        'name' => $name,
-      ));
+      $message = '{framework} is not a valid Drupal framework.  Contrib updates aborted for the';
+      $message .= ' {environ} environment of {name} site.';
+      $this->log()->notice(
+        $message,
+        ['framework' => $framework, 'environ' => $environ, 'name' => $name,]
+      );
       return false;
     }
 
     // Beginning message.
-    $this->log()->notice('Started checking contrib updates for the {environ} environment of {name} site.', array(
-      'environ' => $environ,
-      'name' => $name,
-    ));
+    $this->log()->notice(
+      'Started checking contrib updates for the {environ} environment of {name} site.',
+      ['environ' => $environ, 'name' => $name,]
+    );
 
     // Check if contrib updates are available via drush.
-    $check_env = ($new || $reset) ? 'dev' : $environ;
+    if ($new || $reset) {
+      $check_env = 'dev';
+    } else {
+      $check_env = $environ;
+    }
     $drush_options = trim("pm-update -n --no-core $security $projects");
-    exec("terminus --site=$name --env=$check_env drush '$drush_options'", $report_array, $report_error);
+    exec(
+      "terminus --site=$name --env=$check_env drush '$drush_options'",
+      $report_array,
+      $report_error
+    );
 
     // Look for code updates in the output of the results.
     if (!empty($report_array)) {
@@ -409,18 +423,18 @@ class MassContribUpdateCommand extends TerminusCommand {
 
     // Abort on error.
     if ($report_error) {
-      $this->log()->error('Unable to check contrib updates for the {environ} environment of {name} site.', array(
-        'environ' => $check_env,
-        'name' => $name,
-      ));
+      $this->log()->error(
+        'Unable to check contrib updates for the {environ} environment of {name} site.',
+        ['environ' => $check_env, 'name' => $name,]
+      );
       return false;
     }
 
     // Completion message.
-    $this->log()->notice('Finished checking contrib updates for the {environ} environment of {name} site.', array(
-      'environ' => $environ,
-      'name' => $name,
-    ));
+    $this->log()->notice(
+      'Finished checking contrib updates for the {environ} environment of {name} site.',
+      ['environ' => $environ, 'name' => $name,]
+    );
 
     // Prompt to confirm updates.
     if ($confirm) {
@@ -442,10 +456,10 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Beginning message.
-    $this->log()->notice('Started applying contrib updates for the {environ} environment of {name} site.', array(
-      'environ' => $environ,
-      'name' => $name,
-    ));
+    $this->log()->notice(
+      'Started applying contrib updates for the {environ} environment of {name} site.',
+      ['environ' => $environ, 'name' => $name,]
+    );
 
     // Delete existing mcu environment.
     if (!$new && $reset) {
@@ -464,7 +478,8 @@ class MassContribUpdateCommand extends TerminusCommand {
         'to-env'   => $environ,
       );
       if (!$this->createEnv($mcu_args)) {
-        $message = 'Would you like to apply contrib updates to the dev environment of %s site instead? ';
+        $message = 'Would you like to apply contrib updates to the dev environment';
+        $message .= ' of %s site instead? ';
         $confirmed = $this->input()->confirm(
           array(
             'message' => $message,
@@ -477,9 +492,10 @@ class MassContribUpdateCommand extends TerminusCommand {
         if ($confirmed) {
           $environ = 'dev';
         } else {
-          $this->log()->notice('Contrib updates aborted for the dev environment of {name} site.', array(
-            'name' => $name,
-          ));
+          $this->log()->notice(
+            'Contrib updates aborted for the dev environment of {name} site.',
+            ['name' => $name,]
+          );
           return false;
         }
       }
@@ -504,20 +520,23 @@ class MassContribUpdateCommand extends TerminusCommand {
     if ($mode == 'sftp') {
       $diff = (array)$env->diffstat();
       if (!empty($diff)) {
-        $this->log()->error('Unable to update the {environ} environment of {name} site due to pending changes.  Commit changes and try again.', array(
-          'environ' => $environ,
-          'name' => $name,
-        ));
+        $message = 'Unable to update the {environ} environment of {name} site due';
+        $message .= ' to pending changes.  Commit changes and try again.';
+        $this->log()->error(
+          $message,
+          ['environ' => $environ, 'name' => $name,]
+        );
         return false;
       }
     }
 
     // Backup the site in case something goes awry.
     if (!$skip && !$new) {
-      $this->log()->notice('Started automatic backup for the {environ} environment of {name} site.', array(
-        'environ' => $environ,
-        'name' => $name,
-      ));
+      $message = 'Started automatic backup for the {environ} environment of {name} site.';
+      $this->log()->notice(
+        $message,
+        ['environ' => $environ, 'name' => $name,]
+      );
       $args = array(
         'element' => 'all',
       );
@@ -529,10 +548,12 @@ class MassContribUpdateCommand extends TerminusCommand {
           $this->workflowOutput($workflow);
         }
       } else {
-        $this->log()->error('Backup failed.  Contrib updates aborted for the {environ} environment of {name} site.', array(
-          'environ' => $environ,
-          'name' => $name,
-        ));
+        $message = 'Backup failed.  Contrib updates aborted for the {environ}';
+        $message .= ' environment of {name} site.';
+        $this->log()->error(
+          $message,
+          ['environ' => $environ, 'name' => $name,]
+        );
         return false;
       }
     }
@@ -550,7 +571,11 @@ class MassContribUpdateCommand extends TerminusCommand {
 
     // Perform contrib updates via drush.
     $drush_options = trim("pm-update -y --no-core $security $projects");
-    exec("terminus --site=$name --env=$environ drush '$drush_options'", $update_array, $update_error);
+    exec(
+      "terminus --site=$name --env=$environ drush '$drush_options'",
+      $update_array,
+      $update_error
+    );
 
     // Display output of update results.
     if (!empty($update_array)) {
@@ -560,10 +585,10 @@ class MassContribUpdateCommand extends TerminusCommand {
 
     // Abort on error.
     if ($update_error) {
-      $this->log()->error('Unable to perform contrib updates for the {environ} environment of {name} site.', array(
-        'environ' => $environ,
-        'name' => $name,
-      ));
+      $this->log()->error(
+        'Unable to perform contrib updates for the {environ} environment of {name} site.',
+        ['environ' => $environ, 'name' => $name,]
+      );
       return false;
     }
 
@@ -581,10 +606,10 @@ class MassContribUpdateCommand extends TerminusCommand {
         $this->workflowOutput($workflow);
       }
     } else {
-      $this->log()->error('Unable to perform automatic update commit for the {environ} environment of {name} site.', array(
-        'environ' => $environ,
-        'name' => $name,
-      ));
+      $this->log()->error(
+        'Unable to perform automatic update commit for the {environ} environment of {name} site.',
+        ['environ' => $environ, 'name' => $name,]
+      );
       return false;
     }
 
@@ -600,9 +625,10 @@ class MassContribUpdateCommand extends TerminusCommand {
     }
 
     // Completion message.
-    $this->log()->notice('Finished applying contrib updates for the {environ} environment of {name} site.', array(
-      'environ' => $environ,
-      'name' => $name,
-    ));
+    $this->log()->notice(
+      'Finished applying contrib updates for the {environ} environment of {name} site.',
+      ['environ' => $environ, 'name' => $name,]
+    );
   }
+
 }
