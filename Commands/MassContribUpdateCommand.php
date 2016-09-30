@@ -230,21 +230,7 @@ class MassContribUpdateCommand extends TerminusCommand {
       if ($workflow = $site->environments->create($to_env, $from_env)) {
         $workflow->wait();
         $this->workflowOutput($workflow);
-        // Set the drush version to 8 for the new environment.
-        $mcu_args = array(
-          'site' => $name,
-          'env' => $to_env,
-          'version' => 8,
-        );
-        if ($this->setDrushVersion($mcu_args)) {
-          return true;
-        } else {
-          $this->log()->error(
-            'Unable to set the Drush version for the {multidev} multidev environment.',
-            ['multidev' => $to_env,]
-          );
-          return false;
-        }
+        return true;
       } else {
         $this->log()->error(
           'Unable to create the {multidev} multidev environment.',
@@ -258,6 +244,7 @@ class MassContribUpdateCommand extends TerminusCommand {
       );
       return false;
     }
+    return false;
   }
 
   /**
@@ -303,43 +290,6 @@ class MassContribUpdateCommand extends TerminusCommand {
     } else {
       return false;
     }
-  }
-
-  /**
-   * Set the version of Drush to be used on a specific environment or site.
-   *
-   * @param array $args Array of main arguments.
-   *   site : Site to use
-   *   env : Name of environment to set the Drush version
-   *   version : Drush version to use. Options are 5, 7, and 8.
-   *
-   * @return boolean Return value.
-   *   true : Drush version is set successfully for each environment
-   *   false : Drush version is not set successfully for each environment
-   */
-  public function setDrushVersion($args) {
-    $sites = new Sites();
-    $site = $sites->get($this->input()->siteName(['args' => $args,]));
-    if (isset($args['env'])) {
-      $environments = [$site->environments->get($args['env']),];
-    } else {
-      $environments = $site->environments->all();
-    }
-    $version = 8;
-    if (isset($args['version'])) {
-      $version = $args['version'];
-    }
-    $return = true;
-    foreach ($environments as $environment) {
-      if ($workflow = $environment->setDrushVersion((integer)$version)) {
-        $workflow->wait();
-        $this->workflowOutput($workflow);
-      } else {
-        $return = false;
-        break;
-      }
-    }
-    return $return;
   }
 
   /**
@@ -405,8 +355,7 @@ class MassContribUpdateCommand extends TerminusCommand {
     $drush_options = trim("pm-update -n --no-core $security $projects");
     exec(
       "terminus --site=$name --env=$check_env drush '$drush_options'",
-      $report_array,
-      $report_error
+      $report_array
     );
 
     // Look for code updates in the output of the results.
@@ -419,15 +368,6 @@ class MassContribUpdateCommand extends TerminusCommand {
         // Return if just checking updates.
         return 'Needs update';
       }
-    }
-
-    // Abort on error.
-    if ($report_error) {
-      $this->log()->error(
-        'Unable to check contrib updates for the {environ} environment of {name} site.',
-        ['environ' => $check_env, 'name' => $name,]
-      );
-      return false;
     }
 
     // Completion message.
@@ -573,23 +513,13 @@ class MassContribUpdateCommand extends TerminusCommand {
     $drush_options = trim("pm-update -y --no-core $security $projects");
     exec(
       "terminus --site=$name --env=$environ drush '$drush_options'",
-      $update_array,
-      $update_error
+      $update_array
     );
 
     // Display output of update results.
     if (!empty($update_array)) {
       $update_message = implode("\n", $update_array);
       $this->log()->notice($update_message);
-    }
-
-    // Abort on error.
-    if ($update_error) {
-      $this->log()->error(
-        'Unable to perform contrib updates for the {environ} environment of {name} site.',
-        ['environ' => $environ, 'name' => $name,]
-      );
-      return false;
     }
 
     // Reload the environment.
