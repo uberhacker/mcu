@@ -172,7 +172,7 @@ class MassContribUpdateCommand extends TerminusCommand {
         'name'      => $name,
         'env'       => $env,
         'new'       => $new,
-        'framework' => $site->attributes->framework,
+        'framework' => $site->get('framework'),
       );
       $status = $this->update($args, $assoc_args);
       if ($status) {
