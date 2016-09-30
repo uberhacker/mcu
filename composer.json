@@ -1,0 +1,9 @@
+{
+  "name": "uberhacker/mcu",
+  "description": "Terminus plugin to perform Drupal contrib module or theme updates on Pantheon sites",
+  "homepage": "https://github.com/uberhacker/mcu",
+  "license": "MIT",
+  "require": {
+    "php": ">=5.4"
+  },
+}
