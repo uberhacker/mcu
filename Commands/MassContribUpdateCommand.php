@@ -265,10 +265,6 @@ class MassContribUpdateCommand extends TerminusCommand {
       ['dev', 'test', 'live',]
     );
     if (empty($multidev_envs)) {
-      $this->error(
-        '{site} does not have any multidev environments to delete.',
-        ['site' => $site->get('name'),]
-      );
       return false;
     }
     $environment = $site->environments->get(
