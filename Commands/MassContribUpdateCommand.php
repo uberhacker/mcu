@@ -450,7 +450,7 @@ class MassContribUpdateCommand extends TerminusCommand {
       $this->input()->env(array('args' => $assoc_args, 'site' => $site))
     );
     $env->wake();
-    $mode = $env->info('connection_mode');
+    $mode = $env->get('connection_mode');
 
     // Check for pending changes in sftp mode.
     if ($mode == 'sftp') {
